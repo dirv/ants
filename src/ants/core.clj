@@ -3,7 +3,7 @@
             [clojure.edn :as edn]
             [org.httpkit.client :as httpkit]))
 
-(def url "http://172.30.249.47:8888")
+(def url "http://172.30.249.28:8888")
 (defn teamname [] (str "whoSaysYoucAnt-" (rand-int 999)) )
 
 (defn- command [& params]
