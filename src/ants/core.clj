@@ -3,7 +3,7 @@
             [clojure.edn :as edn]
             [org.httpkit.client :as httpkit]))
 
-(def url "http://172.30.249.28:8888")
+(def url "http://172.30.249.47:8888")
 (defn teamname [] (str "whoSaysYoucAnt-" (rand-int 999)) )
 
 (defn- command [& params]
@@ -12,11 +12,22 @@
 (defn- async-command [callback & params]
   (httpkit/get (str url "/" (clojure.string/join "/" params)) {} callback))
 
+(defn look [ant-id]
+  (command ant-id "look"))
+
+(defn- has-food? [[d v]]
+  (< 0 (count (filter #(= :food (:type %)) v))))
+
+(defn neighbour-with-food [ant-id]
+  (let [neighbours (filter has-food? (:surroundings (:stat (look ant-id))))]
+    (if (not (empty? neighbours))
+      (first (first neighbours)))))
+
 (defn join []
   (:id (:stat (command "join" (teamname)))))
 
-(defn try-spawn [team-id i]
-  (Thread/sleep (* i 100))
+(defn try-spawn [team-id]
+  ;(Thread/sleep (* i 100))
   (try
     (:id (:stat (command team-id "spawn")))
     (catch Exception e
@@ -46,28 +57,36 @@
     (< y dy) "s"
     (> y dy) "n"))
 
+(def nw-weight ["nw" "nw" "nw" "n" "n" "w" "w" "s" "e" "se" "ne"])
+(def sw-weight ["sw" "sw" "sw" "s" "s" "w" "w" "n" "e" "se" "ne"])
+(def ne-weight ["ne" "ne" "ne" "n" "n" "e" "e" "s" "w" "sw" "se"])
+(def se-weight ["se" "se" "se" "s" "s" "e" "e" "n" "w" "nw" "sw"])
 
-(defn async-move-to [ant-id position food-position nest-position got-food gen team-id]
-  (if (and (< 0 gen) (= position nest-position))
-    (when-let [ant-id (try-spawn team-id gen)]
-      (async-move-to ant-id nest-position food-position nest-position false (dec gen) team-id)))
-  (let  [desired (if got-food nest-position food-position)]
-    (async-command (fn [{body :body error :error}]
-                     (if error (println "ERROR" error))
+(defn- choose-next [ant-id [x y] weighting]
+  (or (neighbour-with-food ant-id)
+      (rand-nth weighting)))
+
+(def nest-position [0 0])
+
+(defn async-move-to [ant-id position got-food team-id weighting]
+  (async-command (fn [{body :body error :error}]
+                   (if error (println "ERROR" error))
                    (let [body (edn/read-string (slurp body))
                          got-food (:got-food (:stat body))
                          position (:location (:stat body))]
-                     (async-move-to ant-id position food-position nest-position got-food gen team-id))
-                   )
-                 ant-id "go" (find-direction ant-id position desired))))
+                     (async-move-to ant-id position got-food team-id weighting)))
+                 ant-id "go" (if got-food
+                               (find-direction ant-id position nest-position)
+                               (choose-next ant-id position weighting))))
 
-(defn run-with-name [x y team-id]
-  (let [ant-ids (remove nil? (map (fn [x] (try-spawn team-id x)) (range 5))) 
-        food-location [x y];[2 3];(find-food-se ant-id)
+(defn start-spawn [team-id weighting]
+  (if-let [ant-id (try-spawn team-id)]
+    (async-move-to ant-id [0 0] false team-id weighting)))
+
+(defn run-with-name [team-id]
+  (let [ant-ids (vec (remove nil? (map (partial start-spawn team-id) [nw-weight sw-weight ne-weight se-weight se-weight]))) 
         ]
-   (doall (map #(async-move-to % [0 0] food-location [0 0] false 1 team-id) ant-ids)) 
     (loop [] (recur))
     ))
 
-(defn run [x y]
-  (run-with-name x y (rand-int 999)))
+
