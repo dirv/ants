@@ -4,7 +4,7 @@
             [org.httpkit.client :as httpkit]))
 
 (def url "http://172.30.249.47:8888")
-(defn teamname [id] (str "whoSaysYoucAnt-" id) )
+(defn teamname [] (str "whoSaysYoucAnt-" (rand-int 999)) )
 
 (defn- command [& params]
   (edn/read-string (:body (client/get (str url "/" (clojure.string/join "/" params))))))
@@ -12,8 +12,8 @@
 (defn- async-command [callback & params]
   (httpkit/get (str url "/" (clojure.string/join "/" params)) {} callback))
 
-(defn join [id]
-  (:id (:stat (command "join" (teamname id)))))
+(defn join []
+  (:id (:stat (command "join" (teamname)))))
 
 (defn spawn [team-id]
   (:id (:stat (command team-id "spawn"))))
@@ -54,9 +54,8 @@
                    )
                  ant-id "go" (find-direction ant-id position desired))))
 
-(defn run-with-name [x y tn]
-  (let [team-id (join tn)
-        ant-ids (map (fn [x] (spawn team-id)) (range 2)) 
+(defn run-with-name [x y team-id]
+  (let [ ant-ids (map (fn [x] (spawn team-id)) (range 2)) 
         food-location [x y];[2 3];(find-food-se ant-id)
         ]
    (doall (map #(async-move-to % [0 0] food-location [0 0] false 2 team-id) ant-ids)) 
