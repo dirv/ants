@@ -62,26 +62,38 @@
 (def ne-weight ["ne" "ne" "ne" "n" "n" "e" "e" "s" "w" "sw" "se"])
 (def se-weight ["se" "se" "se" "s" "s" "e" "e" "n" "w" "nw" "sw"])
 
-(defn- choose-next [ant-id [x y] weighting]
+(defn- visited? [seen [x y] direction]
+  (let [new-position (case direction
+                       "nw" [(dec x) (dec y)]
+                       "ne" [(inc x) (dec y)]
+                       "sw" [(dec x) (inc y)]
+                       "se" [(inc x) (dec y)]
+                       "n" [x (dec y)]
+                       "s" [x (inc y)]
+                       "e" [(inc x) y]
+                       "w" [(dec x) y])]
+    (some #{new-position} seen)))
+
+(defn- choose-next [ant-id position weighting seen]
   (or (neighbour-with-food ant-id)
-      (rand-nth weighting)))
+      (rand-nth (remove (partial visited? seen position) weighting))))
 
 (def nest-position [0 0])
 
-(defn async-move-to [ant-id position got-food team-id weighting]
+(defn async-move-to [ant-id position got-food team-id weighting seen]
   (async-command (fn [{body :body error :error}]
                    (if error (println "ERROR" error))
                    (let [body (edn/read-string (slurp body))
                          got-food (:got-food (:stat body))
                          position (:location (:stat body))]
-                     (async-move-to ant-id position got-food team-id weighting)))
+                     (async-move-to ant-id position got-food team-id weighting (conj seen position))))
                  ant-id "go" (if got-food
                                (find-direction ant-id position nest-position)
-                               (choose-next ant-id position weighting))))
+                               (choose-next ant-id position weighting seen))))
 
 (defn start-spawn [team-id weighting]
   (if-let [ant-id (try-spawn team-id)]
-    (async-move-to ant-id [0 0] false team-id weighting)))
+    (async-move-to ant-id [0 0] false team-id weighting [])))
 
 (defn run-with-name [team-id]
   (let [ant-ids (vec (remove nil? (map (partial start-spawn team-id) [nw-weight sw-weight ne-weight se-weight se-weight]))) 
