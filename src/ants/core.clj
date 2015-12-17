@@ -29,25 +29,40 @@
 (defn find-food-se [ant-id]
   (reduce #(find-food ant-id %1 %2) [0 0] se-moves))
 
-(defn find-direction [ant-id [x y]]
+(defn find-direction [ant-id [x y] [dx dy]]
  (cond
-    (and (> x 0) (> y 0)) "nw"
-    (and (< x 0) (> y 0)) "ne"
-    (and (< x 0) (< y 0)) "sw"
-    (and (> x 0) (< y 0)) "se"
-    (< x 0) "e"
-    (> x 0) "w"
-    (< y 0) "s"
-    (> y 0) "n"))
+    (and (> x dx) (> y dy)) "nw"
+    (and (< x dx) (> y dy)) "ne"
+    (and (< x dx) (< y dy)) "se"
+    (and (> x dx) (< y dy)) "sw"
+    (< x dx) "e"
+    (> x dx) "w"
+    (< y dy) "s"
+    (> y dy) "n"))
 
-(defn return-to-nest [ant-id [old-x old-y]]
-  (let [[x y] (:location (:stat (command ant-id "go" (find-direction ant-id [old-x old-y]))))]
-    (if (and (= x 0) (= y 0))
-      [x y]
-      (return-to-nest ant-id [x y]))))
+(defn move-to [ant-id position desired]
+  (let [pos (:location (:stat (command ant-id "go" (find-direction ant-id position desired))))]
+    (if (= pos desired)
+      pos
+      (move-to ant-id pos desired))))
 
-(loop []
-  (let [ant-id (spawn)
-      food-location (find-food-se ant-id)]
-  (return-to-nest ant-id food-location))
-  (recur))
+(defn- find-and-stash [ant-id food-location]
+  (move-to ant-id [0 0] food-location)
+  (move-to ant-id food-location [0 0])
+  ant-id)
+
+(defn- find-and-spawn [ant-id food-location]
+  (find-and-stash ant-id food-location)
+  (spawn))
+
+(defn run []
+  (let [ant-ids (map (fn [x] (spawn)) (range 5)) 
+        food-location [-2 2];(find-food-se ant-id)
+        ]
+    (loop [find-fn find-and-spawn
+           ant-ids ant-ids]
+      (let [new-ant-ids (pmap #(find-fn % food-location) ant-ids)
+            all-ants (distinct (concat new-ant-ids ant-ids))]
+        (if (> 30 (count all-ants))
+          (recur find-and-spawn all-ants)
+          (recur find-and-stash all-ants))))))
