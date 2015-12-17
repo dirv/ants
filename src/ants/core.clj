@@ -15,7 +15,8 @@
 (defn join []
   (:id (:stat (command "join" (teamname)))))
 
-(defn try-spawn [team-id]
+(defn try-spawn [team-id i]
+  (Thread/sleep (* i 100))
   (try
     (:id (:stat (command team-id "spawn")))
     (catch Exception e
@@ -48,10 +49,11 @@
 
 (defn async-move-to [ant-id position food-position nest-position got-food gen team-id]
   (if (and (< 0 gen) (= position nest-position))
-    (when-let [ant-id (try-spawn team-id)]
-      (async-move-to (try-spawn team-id) nest-position food-position nest-position false (dec gen) team-id)))
+    (when-let [ant-id (try-spawn team-id gen)]
+      (async-move-to ant-id nest-position food-position nest-position false (dec gen) team-id)))
   (let  [desired (if got-food nest-position food-position)]
-    (async-command (fn [{body :body}]
+    (async-command (fn [{body :body error :error}]
+                     (if error (println "ERROR" error))
                    (let [body (edn/read-string (slurp body))
                          got-food (:got-food (:stat body))
                          position (:location (:stat body))]
@@ -60,10 +62,10 @@
                  ant-id "go" (find-direction ant-id position desired))))
 
 (defn run-with-name [x y team-id]
-  (let [ ant-ids (map (fn [x] (try-spawn team-id)) (range 2)) 
+  (let [ant-ids (remove nil? (map (fn [x] (try-spawn team-id x)) (range 5))) 
         food-location [x y];[2 3];(find-food-se ant-id)
         ]
-   (doall (map #(async-move-to % [0 0] food-location [0 0] false 2 team-id) ant-ids)) 
+   (doall (map #(async-move-to % [0 0] food-location [0 0] false 1 team-id) ant-ids)) 
     (loop [] (recur))
     ))
 
