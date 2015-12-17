@@ -76,7 +76,10 @@
 
 (defn- choose-next [ant-id position weighting seen]
   (or (neighbour-with-food ant-id)
-      (rand-nth (remove (partial visited? seen position) weighting))))
+      (let [not-visited (remove (partial visited? seen position) weighting)]
+        (if (empty? not-visited)
+          (rand-nth weighting)
+          (rand-nth not-visited)))))
 
 (def nest-position [0 0])
 
@@ -84,16 +87,21 @@
   (async-command (fn [{body :body error :error}]
                    (if error (println "ERROR" error))
                    (let [body (edn/read-string (slurp body))
-                         got-food (:got-food (:stat body))
+                         now-got-food (:got-food (:stat body))
                          position (:location (:stat body))]
                      (async-move-to ant-id position got-food team-id weighting (conj seen position))))
                  ant-id "go" (if got-food
                                (find-direction ant-id position nest-position)
                                (choose-next ant-id position weighting seen))))
 
+(defn- move-out [ant-id weighting i]
+  (command ant-id "go" (first weighting)))
+
 (defn start-spawn [team-id weighting]
   (if-let [ant-id (try-spawn team-id)]
-    (async-move-to ant-id [0 0] false team-id weighting [])))
+    (do
+      (vec (map (partial move-out ant-id weighting) (range 4)))
+    (async-move-to ant-id [0 0] false team-id weighting []))))
 
 (defn run-with-name [team-id]
   (let [ant-ids (vec (remove nil? (map (partial start-spawn team-id) [nw-weight sw-weight ne-weight se-weight se-weight]))) 
