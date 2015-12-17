@@ -4,7 +4,7 @@
             [org.httpkit.client :as httpkit]))
 
 (def url "http://172.30.249.47:8888")
-(def teamname (str "whoSaysYoucAnt-" (rand-int 99999)) )
+(defn teamname [id] (str "whoSaysYoucAnt-" id) )
 
 (defn- command [& params]
   (edn/read-string (:body (client/get (str url "/" (clojure.string/join "/" params))))))
@@ -12,13 +12,10 @@
 (defn- async-command [callback & params]
   (httpkit/get (str url "/" (clojure.string/join "/" params)) {} callback))
 
-(defn join []
-  (:id (:stat (command "join" teamname))))
+(defn join [id]
+  (:id (:stat (command "join" (teamname id)))))
 
-(def team-id
-  (join))
-
-(defn spawn []
+(defn spawn [team-id]
   (:id (:stat (command team-id "spawn"))))
 
 (def se-moves
@@ -45,22 +42,26 @@
     (> y dy) "n"))
 
 
-(defn async-move-to [ant-id position food-position nest-position got-food gen]
+(defn async-move-to [ant-id position food-position nest-position got-food gen team-id]
   (if (and (< 0 gen) (= position nest-position))
-    (async-move-to (spawn) nest-position food-position nest-position false (dec gen)))
+    (async-move-to (spawn team-id) nest-position food-position nest-position false (dec gen) team-id))
   (let  [desired (if got-food nest-position food-position)]
     (async-command (fn [{body :body}]
                    (let [body (edn/read-string (slurp body))
                          got-food (:got-food (:stat body))
                          position (:location (:stat body))]
-                     (async-move-to ant-id position food-position nest-position got-food gen))
+                     (async-move-to ant-id position food-position nest-position got-food gen team-id))
                    )
                  ant-id "go" (find-direction ant-id position desired))))
 
-(defn run [x y]
-  (let [ant-ids (map (fn [x] (spawn)) (range 2)) 
+(defn run-with-name [x y tn]
+  (let [team-id (join tn)
+        ant-ids (map (fn [x] (spawn team-id)) (range 2)) 
         food-location [x y];[2 3];(find-food-se ant-id)
         ]
-   (doall (map #(async-move-to % [0 0] food-location [0 0] false 2) ant-ids)) 
+   (doall (map #(async-move-to % [0 0] food-location [0 0] false 2 team-id) ant-ids)) 
     (loop [] (recur))
     ))
+
+(defn run [x y]
+  (run-with-name x y (rand-int 999)))
