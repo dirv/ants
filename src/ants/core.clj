@@ -1,12 +1,16 @@
 (ns ants.core
   (:require [clj-http.client :as client]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [org.httpkit.client :as httpkit]))
 
 (def url "http://172.30.249.47:8888")
 (def teamname (str "whoSaysYoucAnt-" (rand-int 99999)) )
 
 (defn- command [& params]
   (edn/read-string (:body (client/get (str url "/" (clojure.string/join "/" params))))))
+
+(defn- async-command [callback & params]
+  (httpkit/get (str url "/" (clojure.string/join "/" params)) {} callback))
 
 (defn join []
   (:id (:stat (command "join" teamname))))
@@ -40,29 +44,23 @@
     (< y dy) "s"
     (> y dy) "n"))
 
-(defn move-to [ant-id position desired]
-  (let [pos (:location (:stat (command ant-id "go" (find-direction ant-id position desired))))]
-    (if (= pos desired)
-      pos
-      (move-to ant-id pos desired))))
 
-(defn- find-and-stash [ant-id food-location]
-  (move-to ant-id [0 0] food-location)
-  (move-to ant-id food-location [0 0])
-  ant-id)
+(defn async-move-to [ant-id position food-position nest-position got-food gen]
+  (if (and (< 0 gen) (= position nest-position))
+    (async-move-to (spawn) nest-position food-position nest-position false (dec gen)))
+  (let  [desired (if got-food nest-position food-position)]
+    (async-command (fn [{body :body}]
+                   (let [body (edn/read-string (slurp body))
+                         got-food (:got-food (:stat body))
+                         position (:location (:stat body))]
+                     (async-move-to ant-id position food-position nest-position got-food gen))
+                   )
+                 ant-id "go" (find-direction ant-id position desired))))
 
-(defn- find-and-spawn [ant-id food-location]
-  (find-and-stash ant-id food-location)
-  (spawn))
-
-(defn run []
-  (let [ant-ids (map (fn [x] (spawn)) (range 5)) 
-        food-location [-2 2];(find-food-se ant-id)
+(defn run [x y]
+  (let [ant-ids (map (fn [x] (spawn)) (range 2)) 
+        food-location [x y];[2 3];(find-food-se ant-id)
         ]
-    (loop [find-fn find-and-spawn
-           ant-ids ant-ids]
-      (let [new-ant-ids (pmap #(find-fn % food-location) ant-ids)
-            all-ants (distinct (concat new-ant-ids ant-ids))]
-        (if (> 30 (count all-ants))
-          (recur find-and-spawn all-ants)
-          (recur find-and-stash all-ants))))))
+   (doall (map #(async-move-to % [0 0] food-location [0 0] false 2) ant-ids)) 
+    (loop [] (recur))
+    ))
