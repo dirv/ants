@@ -89,7 +89,7 @@
                    (let [body (edn/read-string (slurp body))
                          got-food (:got-food (:stat body))
                          position (:location (:stat body))]
-                     (async-move-to ant-id position got-food team-id weighting (conj seen position))))
+                     (async-move-to ant-id position got-food team-id weighting (if got-food [] (conj seen position)))))
                  ant-id "go" (if got-food
                                (find-direction ant-id position nest-position)
                                (choose-next ant-id position weighting seen))))
