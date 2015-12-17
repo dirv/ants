@@ -3,7 +3,7 @@
             [clojure.edn :as edn]
             [org.httpkit.client :as httpkit]))
 
-(def url "http://172.30.249.47:8888")
+(def url "http://172.30.249.28:8888")
 (defn teamname [] (str "whoSaysYoucAnt-" (rand-int 999)) )
 
 (defn- command [& params]
@@ -87,7 +87,7 @@
   (async-command (fn [{body :body error :error}]
                    (if error (println "ERROR" error))
                    (let [body (edn/read-string (slurp body))
-                         now-got-food (:got-food (:stat body))
+                         got-food (:got-food (:stat body))
                          position (:location (:stat body))]
                      (async-move-to ant-id position got-food team-id weighting (conj seen position))))
                  ant-id "go" (if got-food
